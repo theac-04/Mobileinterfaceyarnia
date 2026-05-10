@@ -4,11 +4,14 @@ import { HexColorPicker } from "react-colorful";
 import { Palette, Maximize2 } from "lucide-react";
 
 type ContentBlock =
-  | { type: "text";  content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "image"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "quote"; text: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "music"; url: string; title: string; accentColor?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "video"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number };
+  | { type: "text";  content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
+  | { type: "image"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
+  | { type: "quote"; text: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
+  | { type: "music"; url: string; title: string; accentColor?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
+  | { type: "video"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
+  | { type: "bookText"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
+  | { type: "note"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
+  | { type: "background"; content: string; x: number; y: number; width: number; rotation?: number; color?: string };
 
 interface ScrapbookBlockProps {
   block: ContentBlock;
@@ -16,6 +19,7 @@ interface ScrapbookBlockProps {
   isEditing: boolean;
   isSelected: boolean;
   canvasWidth?: number;
+  canvasHeight?: number;
   onSelect: (index: number) => void;
   onUpdate: (index: number, updates: Partial<ContentBlock>) => void;
   onDelete: (index: number) => void;
@@ -28,6 +32,9 @@ const DEFAULT_COLORS: Record<string, string> = {
   image: "#ffffff",
   music: "#fce7f3",
   video: "#1e1b2e",
+  bookText: "#000000",
+  note: "#fef3c7",
+  background: "#000000",
 };
 
 export function ScrapbookBlock({
@@ -36,22 +43,23 @@ export function ScrapbookBlock({
   isEditing,
   isSelected,
   canvasWidth = 340,
+  canvasHeight = 600,
   onSelect,
   onUpdate,
   onDelete,
   onContentChange,
 }: ScrapbookBlockProps) {
+  const dragX = useMotionValue(0);
+  const dragY = useMotionValue(0);
+
   const x = block.x ?? 0;
   const y = block.y ?? 0;
-  const width = block.width ?? 200;
+  const width = block.type === "background" ? canvasWidth : (block.width ?? 200);
   const rotation = block.rotation ?? 0;
   const bgColor = block.color ?? DEFAULT_COLORS[block.type] ?? "#ffffff";
   const textColor = getContrastColor(bgColor);
   // Muted variant — same hue, 65% opacity — for captions / secondary labels
   const mutedColor = textColor === "#ffffff" ? "rgba(255,255,255,0.65)" : "rgba(55,65,81,0.65)";
-
-  const dragX = useMotionValue(0);
-  const dragY = useMotionValue(0);
 
   const [showPicker, setShowPicker] = useState(false);
   const [showAccentPicker, setShowAccentPicker] = useState(false);
@@ -69,6 +77,15 @@ export function ScrapbookBlock({
     el.addEventListener("pointerdown", stop);
     return () => el.removeEventListener("pointerdown", stop);
   }, []);
+
+  // Stop dragging when interacting with the Music accent color wheel
+  useEffect(() => {
+    const el = accentPickerRef.current;
+    if (!el) return;
+    const stop = (e: PointerEvent) => e.stopPropagation();
+    el.addEventListener("pointerdown", stop);
+    return () => el.removeEventListener("pointerdown", stop);
+  }, [showAccentPicker]);
 
   // Apply the same native stopPropagation to all interactive elements inside
   // the card (textarea, input, audio) so that typing / scrubbing / clicking
@@ -109,7 +126,7 @@ export function ScrapbookBlock({
   const handleDragEnd = (_: any, info: any) => {
     if (!isEditing || !isSelected) return;
     const newX = Math.max(0, Math.min(canvasWidth - width, x + info.offset.x));
-    const newY = Math.max(0, y + info.offset.y);
+    const newY = Math.max(0, Math.min(canvasHeight - 100, y + info.offset.y)); // approximate block height 100
     dragX.set(0);
     dragY.set(0);
     onUpdate(index, { x: newX, y: newY });
@@ -153,38 +170,41 @@ export function ScrapbookBlock({
 
   return (
     <motion.div
-      drag={isEditing && isSelected && !showPicker && !isResizing}
+      drag={block.type !== "background" && isEditing && isSelected && !showPicker && !showAccentPicker && !isResizing}
       dragMomentum={false}
       onDragEnd={handleDragEnd}
       dragElastic={0}
+      dragConstraints={{
+        left: 0,
+        right: Math.max(0, canvasWidth - width - 4),
+        top: 0,
+        bottom: Math.max(0, canvasHeight - 120),
+      }}
       className="absolute"
       style={{
-        x: dragX,
-        y: dragY,
-        left: x,
-        top: y,
-        width: width,
+        ...(block.type === "background" ? { position: 'absolute', left: 0, top: 0, width: canvasWidth, height: canvasHeight, zIndex: 0 } : block.float ? { position: 'relative', float: block.float } : { position: 'absolute', left: x, top: y }),
+        width: block.type === "background" ? canvasWidth : width,
         rotate: `${rotation}deg`,
-        zIndex: isSelected ? 9999 : Math.max(1, block.zIndex ?? (index * 2 + 1)),
+        zIndex: block.type === "background" ? 0 : isSelected ? 9999 : (block.zIndex ?? (block.type === "bookText" ? 0 : index * 2 + 1)),
         touchAction: isEditing && isSelected ? "none" : "auto",
       }}
-      animate={{ scale: isSelected ? 1.05 : 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      whileDrag={{ scale: 1.1, zIndex: 200 }}
+      animate={block.type !== "background" ? { scale: isSelected ? 1.05 : 1 } : {}}
+      transition={block.type !== "background" ? { type: "spring", stiffness: 300, damping: 25 } : {}}
+      whileDrag={block.type !== "background" ? { scale: 1.1, zIndex: 200 } : {}}
     >
       <div
-        className={`relative ${isEditing ? "cursor-grab active:cursor-grabbing" : ""}`}
+        className={block.type === "background" ? "" : `relative ${isEditing ? "cursor-grab active:cursor-grabbing" : ""}`}
         ref={cardRef}
         style={{ touchAction: isEditing && isSelected ? "none" : "auto" }}
-        onClick={isEditing ? (e) => { e.stopPropagation(); onSelect(index); } : undefined}
+        onClick={block.type !== "background" && isEditing ? (e) => { e.stopPropagation(); onSelect(index); } : undefined}
       >
         {/* Selection border */}
-        {isSelected && isEditing && (
+        {block.type !== "background" && isSelected && isEditing && (
           <div className="absolute -inset-2 border-2 border-blue-500 rounded-lg pointer-events-none" />
         )}
 
         {/* Colour picker trigger — top-right */}
-        {isSelected && isEditing && (
+        {block.type !== "background" && isSelected && isEditing && (
           <div
             ref={pickerRef}
             className="absolute -top-3 -right-3 z-50"
@@ -217,7 +237,7 @@ export function ScrapbookBlock({
         )}
 
         {/* Resize handle — bottom-right corner */}
-        {isEditing && isSelected && (
+        {block.type !== "background" && isEditing && isSelected && (
           <div
             className="absolute -bottom-3 -right-3 w-6 h-6 bg-blue-500 rounded-full border-2 border-white shadow-md flex items-center justify-center"
             style={{ touchAction: "none", zIndex: 201, cursor: "se-resize" }}
@@ -312,17 +332,17 @@ export function ScrapbookBlock({
           </div>
         )}
 
-        {/* ── MUSIC ── */}
+ {/* ── MUSIC ── */}
         {block.type === "music" && (() => {
-          // Music blocks are "invisible" unless selected in edit mode —
-          // they float as ambient audio on the canvas.
           const cardVisible = isEditing && isSelected;
           const cardStyle = cardVisible ? { backgroundColor: bgColor } : { backgroundColor: "transparent" };
           const cardClass  = cardVisible ? "p-3 rounded shadow-lg" : "p-1";
 
+          // ADD THIS LINE: Check if it's a YouTube link
+          const ytId = getYouTubeVideoId(block.url);
+
           return (
             <div className={cardClass} style={cardStyle}>
-              {/* Edit-mode badge when not selected */}
               {isEditing && !isSelected && (
                 <button
                   className="absolute -top-3 -right-3 z-50 flex items-center gap-1 bg-black/40 backdrop-blur-sm text-white rounded-full px-2 py-0.5 shadow"
@@ -336,7 +356,6 @@ export function ScrapbookBlock({
 
               {isEditing && isSelected ? (
                 <div className="space-y-2" onClick={(e) => e.stopPropagation()}>
-                  {/* Title */}
                   <input
                     type="text"
                     value={block.title}
@@ -345,7 +364,6 @@ export function ScrapbookBlock({
                     className="w-full p-1.5 border rounded text-xs bg-white/80"
                   />
 
-                  {/* Primary: file upload */}
                   <label className="flex items-center justify-center gap-2 w-full px-3 py-2.5 bg-pink-500 text-white rounded-lg text-xs cursor-pointer hover:bg-pink-600 active:bg-pink-700 font-medium">
                     🎵 Upload audio file
                     <input
@@ -363,74 +381,54 @@ export function ScrapbookBlock({
                     />
                   </label>
 
-                  {/* Secondary: direct audio URL (e.g. .mp3 link) */}
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={block.url.startsWith("data:") ? "" : block.url}
-                      onChange={(e) => onContentChange(index, "url", e.target.value)}
-                      placeholder="…or paste a direct audio URL"
-                      className="flex-1 p-1.5 border rounded text-xs bg-white/80"
-                    />
-                  </div>
-
-                  {/* Progress-bar accent colour */}
-                  <div
-                    ref={accentPickerRef}
-                    className="flex items-center gap-2"
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <span className="text-xs text-gray-500 flex-1">Bar colour</span>
-                    <div className="relative">
-                      <button
-                        className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-gray-300 bg-white/80 active:scale-95 transition-transform"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onClick={(e) => { e.stopPropagation(); setShowAccentPicker((v) => !v); }}
-                      >
-                        <span
-                          className="w-3.5 h-3.5 rounded-full border border-gray-300 flex-shrink-0"
-                          style={{ backgroundColor: block.accentColor ?? "#ffffff" }}
-                        />
-                        <span className="text-xs text-gray-600">Pick</span>
-                      </button>
-                      {showAccentPicker && (
-                        <div
-                          className="absolute right-0 top-9 bg-white rounded-2xl shadow-2xl p-3 border border-gray-100"
-                          style={{ zIndex: 9999, minWidth: 200 }}
-                          onPointerDown={(e) => e.stopPropagation()}
-                        >
-                          <p className="text-xs text-gray-500 mb-2 font-medium">Progress bar colour</p>
-                          <HexColorPicker color={block.accentColor ?? "#ffffff"} onChange={handleAccentColorChange} />
-                          <div className="mt-2 grid grid-cols-6 gap-1">
-                            {["#ffffff","#f472b6","#a78bfa","#60a5fa","#34d399","#fb923c",
-                              "#fbbf24","#e879f9","#38bdf8","#4ade80","#f87171","#94a3b8"].map((c) => (
-                              <button
-                                key={c}
-                                className="w-6 h-6 rounded-full border-2 transition-transform hover:scale-110 active:scale-95"
-                                style={{ backgroundColor: c, borderColor: (block.accentColor ?? "#ffffff") === c ? "#3b82f6" : "#d1d5db" }}
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onClick={(e) => { e.stopPropagation(); handleAccentColorChange(c); }}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Live preview */}
+                  {/* UPDATE THIS SECTION: Render the correct player */}
                   {block.url ? (
-                    <RegularAudioPlayer url={block.url} accentColor={block.accentColor} />
+                    ytId ? (
+                      <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+                         <iframe
+                          src={`https://www.youtube.com/embed/${ytId}?playsinline=1&rel=0&modestbranding=1&controls=1`}
+                          style={{ width: "100%", height: "100%", border: "none" }}
+                          title="YouTube Music"
+                        />
+                      </div>
+                    ) : (
+                      <RegularAudioPlayer url={block.url} accentColor={block.accentColor} />
+                    )
                   ) : (
                     <p className="text-xs text-gray-400 text-center py-1">Upload a file or paste a URL above</p>
                   )}
+                  
+                  {/* Progress-bar accent colour (Keep this code) */}
+                  <div ref={accentPickerRef} className="flex items-center gap-2" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+                    <span className="text-xs text-gray-500 flex-1">Bar colour</span>
+                    <div className="relative">
+                      <button className="flex items-center gap-1.5 px-2 py-1 rounded-full border border-gray-300 bg-white/80" onClick={(e) => { e.stopPropagation(); setShowAccentPicker((v) => !v); }}>
+                        <span className="w-3.5 h-3.5 rounded-full border border-gray-300" style={{ backgroundColor: block.accentColor ?? "#ffffff" }} />
+                        <span className="text-xs text-gray-600">Pick</span>
+                      </button>
+                      {showAccentPicker && (
+                         <div className="absolute right-0 top-9 bg-white rounded-2xl shadow-2xl p-3 border" style={{ zIndex: 9999, minWidth: 200 }} onPointerDown={(e) => e.stopPropagation()}>
+                           <HexColorPicker color={block.accentColor ?? "#ffffff"} onChange={handleAccentColorChange} />
+                         </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-1">
                   <p className="text-xs drop-shadow" style={{ color: mutedColor }}>🎵 {block.title}</p>
+                  {/* UPDATE THIS SECTION TOO: For the non-editing view */}
                   {block.url ? (
-                    <RegularAudioPlayer url={block.url} accentColor={block.accentColor} />
+                    ytId ? (
+                      <div className="rounded-xl overflow-hidden bg-black" style={{ aspectRatio: "16/9" }}>
+                         <iframe
+                          src={`https://www.youtube-nocookie.com/embed/${ytId}?playsinline=1&rel=0&modestbranding=1&controls=1`}
+                          style={{ width: "100%", height: "100%", border: "none" }}
+                        />
+                      </div>
+                    ) : (
+                      <RegularAudioPlayer url={block.url} accentColor={block.accentColor} />
+                    )
                   ) : (
                     <p className="text-xs italic" style={{ color: mutedColor }}>No audio yet</p>
                   )}
@@ -506,6 +504,53 @@ export function ScrapbookBlock({
             </div>
           );
         })()}
+
+        {/* ── BOOK TEXT ── */}
+        {block.type === "bookText" && (
+          <div className="p-3">
+            {isEditing && isSelected ? (
+              <textarea
+                value={block.content}
+                onChange={(e) => onContentChange(index, "content", e.target.value)}
+                className="w-full bg-transparent border-none outline-none resize-none text-sm"
+                style={{ color: textColor }}
+                rows={3}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <p className="text-sm" style={{ color: textColor }}>{block.content}</p>
+            )}
+          </div>
+        )}
+
+        {/* ── NOTE ── */}
+        {block.type === "note" && (
+          <div className="p-3 rounded shadow-lg border-2" style={{ backgroundColor: bgColor, borderColor: darken(bgColor, 0.1) }}>
+            {isEditing && isSelected ? (
+              <textarea
+                value={block.content}
+                onChange={(e) => onContentChange(index, "content", e.target.value)}
+                className="w-full bg-transparent border-none outline-none resize-none text-sm"
+                style={{ color: textColor }}
+                rows={3}
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <p className="text-sm" style={{ color: textColor }}>{block.content}</p>
+            )}
+          </div>
+        )}
+
+        {/* ── BACKGROUND ── */}
+        {block.type === "background" && (
+          <textarea
+            value={block.content}
+            onChange={(e) => onContentChange(index, "content", e.target.value)}
+            className="w-full h-full bg-transparent border-none outline-none resize-none text-sm p-4"
+            style={{ color: textColor }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        )}
       </div>
     </motion.div>
   );
@@ -568,7 +613,7 @@ function VideoPlayer({ url, className }: { url: string; className?: string }) {
         onPointerDown={(e) => e.stopPropagation()}
       >
         <iframe
-          src={`https://www.youtube.com/embed/${ytId}?playsinline=1&rel=0&modestbranding=1&controls=1`}
+          src={`https://www.youtube-nocookie.com/embed/${ytId}?playsinline=1&rel=0&modestbranding=1&controls=1`}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           allowFullScreen
           style={{ width: "100%", height: "100%", border: "none" }}
