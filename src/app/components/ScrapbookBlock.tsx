@@ -4,14 +4,14 @@ import { HexColorPicker } from "react-colorful";
 import { Palette, Maximize2 } from "lucide-react";
 
 type ContentBlock =
-  | { type: "text";  content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
-  | { type: "image"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
-  | { type: "quote"; text: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
-  | { type: "music"; url: string; title: string; accentColor?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
-  | { type: "video"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
-  | { type: "bookText"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
-  | { type: "note"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right' }
-  | { type: "background"; content: string; x: number; y: number; width: number; rotation?: number; color?: string };
+  | { type: "text";  content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "image"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "quote"; text: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "music"; url: string; title: string; accentColor?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "video"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "bookText"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "note"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "background"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; ownerId?: string; ownerName?: string };
 
 interface ScrapbookBlockProps {
   block: ContentBlock;
@@ -24,6 +24,7 @@ interface ScrapbookBlockProps {
   onUpdate: (index: number, updates: Partial<ContentBlock>) => void;
   onDelete: (index: number) => void;
   onContentChange: (index: number, field: string, value: string) => void;
+  currentUserId: string;
 }
 
 const DEFAULT_COLORS: Record<string, string> = {
@@ -48,6 +49,7 @@ export function ScrapbookBlock({
   onUpdate,
   onDelete,
   onContentChange,
+  currentUserId,
 }: ScrapbookBlockProps) {
   const dragX = useMotionValue(0);
   const dragY = useMotionValue(0);

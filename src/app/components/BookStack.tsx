@@ -7,11 +7,14 @@ import { HexColorPicker } from "react-colorful";
 import { RotateCcw, RotateCw, Trash2, ArrowUp, ArrowDown, Palette } from "lucide-react";
 
 type ContentBlock =
-  | { type: "text";  content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "image"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "quote"; text: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "music"; url: string; title: string; accentColor?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number }
-  | { type: "video"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number };
+  | { type: "text";  content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "image"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "quote"; text: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "music"; url: string; title: string; accentColor?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "video"; url: string; caption?: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "bookText"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "note"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; float?: 'left' | 'right'; ownerId?: string; ownerName?: string }
+  | { type: "background"; content: string; x: number; y: number; width: number; rotation?: number; color?: string; zIndex?: number; ownerId?: string; ownerName?: string };
 
 interface Book {
   id: number;
@@ -42,6 +45,7 @@ const initialBooks: Book[] = [
     content: [
       { type: "text",  content: "Habits are the compound interest of self-improvement.", x: 30, y: 40,  width: 240, rotation: 2  },
       { type: "quote", text: "You do not rise to the level of your goals. You fall to the level of your systems.", x: 60, y: 200, width: 250, rotation: -1 },
+      { type: "note", content: "This is a note from Alice!", x: 100, y: 400, width: 200, rotation: 3, ownerId: "alice", ownerName: "Alice" },
     ],
   },
   {
@@ -52,6 +56,7 @@ const initialBooks: Book[] = [
     content: [
       { type: "text",  content: "Alicia Berenson's life is seemingly perfect...", x: 40,  y: 30,  width: 220, rotation: -2 },
       { type: "image", url: "https://images.unsplash.com/photo-1460661419201-fd4cecdf8a8b?w=800&q=80", caption: "The mystery begins", x: 100, y: 250, width: 180, rotation: 3 },
+      { type: "quote", text: "Some secrets are better left buried.", x: 50, y: 450, width: 220, rotation: -1, ownerId: "bob", ownerName: "Bob" },
     ],
   },
   {
@@ -62,6 +67,7 @@ const initialBooks: Book[] = [
     content: [
       { type: "text",  content: "Tara was seventeen the first time she set foot in a classroom.", x: 25, y: 50,  width: 260, rotation: 1  },
       { type: "quote", text: "Everything I had worked for... to see more truths than those given to me by my father.", x: 70, y: 220, width: 230, rotation: -2 },
+      { type: "note", content: "Charlie's contribution to this scrapbook!", x: 120, y: 400, width: 200, rotation: 2, ownerId: "charlie", ownerName: "Charlie" },
     ],
   },
 ];
@@ -81,6 +87,10 @@ export function BookStack() {
   const [gradTo, setGradTo] = useState("#764ba2");
   const [gradAngle, setGradAngle] = useState(135);
   const bgPickerRef = useRef<HTMLDivElement>(null);
+  const [contributorsVisible, setContributorsVisible] = useState(false);
+  const [selectedContributor, setSelectedContributor] = useState<{ ownerId: string; ownerName: string } | null>(null);
+
+  const currentUserId = "me"; // Hardcoded for now
 
   const pageScrollRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -113,7 +123,28 @@ export function BookStack() {
   };
 
   const handleOpenBook  = () => { setOpenBook(books[0]); setIsEditing(false); };
-  const handleCloseBook = () => { setOpenBook(null);     setIsEditing(false); };
+  const handleOpenBookById = (bookId: number) => {
+    const book = books.find((b) => b.id === bookId);
+    if (!book) return;
+    setOpenBook(book);
+    setIsEditing(false);
+    setContributorsVisible(false);
+    setSelectedContributor(null);
+  };
+
+  const getContributorWorks = (ownerId: string) =>
+    books.filter((book) => book.id !== (openBook?.id ?? -1) && book.content.some((block) => block.ownerId === ownerId));
+
+  const handleContributorClick = (contributor: { ownerId: string; ownerName: string }) => {
+    const works = getContributorWorks(contributor.ownerId);
+    if (works.length > 0) {
+      window.location.href = `/user/${contributor.ownerId}`;
+      return;
+    }
+    setSelectedContributor(contributor);
+  };
+
+  const handleCloseBook = () => { setOpenBook(null); setIsEditing(false); setContributorsVisible(false); setSelectedContributor(null); };
 
   const handleStartEdit = () => {
     if (openBook) {
@@ -144,7 +175,7 @@ export function BookStack() {
   const handleContentChange = (index: number, field: string, value: string) => {
     const next = [...editedContent];
     next[index] = field === "useUrl"
-      ? { ...next[index], useUrl: value === "true" } as ContentBlock
+      ? { ...next[index], useUrl: value === "true" } as unknown as ContentBlock
       : { ...next[index], [field]: value } as ContentBlock;
     setEditedContent(next);
   };
@@ -172,15 +203,18 @@ export function BookStack() {
     const randomX = Math.floor(Math.random() * Math.max(40, canvasWidth - 240));
     const rot = Math.floor(Math.random() * 10) - 5;
 
-    let newBlock: ContentBlock;
+    let newBlock: ContentBlock | null = null;
     switch (type) {
       case "text":  newBlock = { type: "text",  content: "New note...",  x: randomX, y: nextY, width: 200, rotation: rot }; break;
       case "quote": newBlock = { type: "quote", text: "New quote...",   x: randomX, y: nextY, width: 220, rotation: rot }; break;
       case "image": newBlock = { type: "image", url: "", caption: "",   x: randomX, y: nextY, width: 180, rotation: rot }; break;
       case "music": newBlock = { type: "music", url: "", title: "New song", x: randomX, y: nextY, width: 220, rotation: rot }; break;
       case "video": newBlock = { type: "video", url: "", caption: "",   x: randomX, y: nextY, width: 240, rotation: rot }; break;
+      default:
+        newBlock = { type: "text", content: "New note...", x: randomX, y: nextY, width: 200, rotation: rot };
     }
 
+    if (!newBlock) return;
     setEditedContent([...editedContent, newBlock]);
     requestAnimationFrame(() => {
       pageScrollRef.current?.scrollTo({ top: pageScrollRef.current.scrollHeight, behavior: "smooth" });
@@ -222,6 +256,20 @@ export function BookStack() {
   if (openBook) {
     const displayBlocks = isEditing ? editedContent : openBook.content;
     const canvasHeight = computeCanvasHeight(displayBlocks);
+
+    // Check if current book has contributions from other users
+    const hasOtherContributors = displayBlocks.some(block => (block.ownerId || currentUserId) !== currentUserId);
+    const otherContributors = Array.from(new Map(displayBlocks
+      .filter(block => block.ownerId && block.ownerId !== currentUserId)
+      .map((block) => [block.ownerId!, { ownerId: block.ownerId!, ownerName: block.ownerName || "Someone" }])
+    ).values());
+
+    const contributorWorks = selectedContributor
+      ? books.filter((book) =>
+          book.id !== openBook.id &&
+          book.content.some((block) => block.ownerId === selectedContributor.ownerId)
+        )
+      : [];
 
     return (
       <div ref={pageScrollRef} className="relative w-full h-full bg-amber-50 overflow-y-auto">
@@ -466,8 +514,68 @@ export function BookStack() {
                     onUpdate={handleBlockUpdate}
                     onDelete={handleDeleteBlock}
                     onContentChange={handleContentChange}
+                    currentUserId={currentUserId}
                   />
                 ))}
+
+                {/* Mascot indicator — shows when there are other contributors */}
+                {hasOtherContributors && (
+                  <div
+                    className="absolute top-4 right-4 z-40 cursor-pointer"
+                    onClick={() => setContributorsVisible(!contributorsVisible)}
+                  >
+                    <div className="bg-white/90 backdrop-blur-sm rounded-full p-2 shadow-lg border border-gray-200 hover:scale-110 transition-transform">
+                      <div className="text-2xl">🐻</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Contributors list popup */}
+                {contributorsVisible && hasOtherContributors && (
+                  <div className="absolute top-16 right-4 z-50 bg-white rounded-xl p-4 shadow-xl border border-gray-200 max-w-xs">
+                    <h3 className="text-sm font-semibold text-gray-800 mb-2">Contributors</h3>
+                    <div className="space-y-1">
+                      {otherContributors.map((contributor) => (
+                        <button
+                          key={contributor.ownerId}
+                          onClick={() => handleContributorClick(contributor)}
+                          className="w-full text-left text-sm text-gray-700 flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="w-2 h-2 bg-blue-400 rounded-full flex-shrink-0"></span>
+                          {contributor.ownerName}
+                        </button>
+                      ))}
+                    </div>
+
+                    {selectedContributor && (
+                      <div className="mt-3 pt-3 border-t border-gray-100">
+                        <p className="text-xs text-gray-500 mb-2">Other works by {selectedContributor.ownerName}</p>
+                        {contributorWorks.length > 0 ? (
+                          <div className="space-y-2">
+                            {contributorWorks.map((book) => (
+                              <button
+                                key={book.id}
+                                onClick={() => handleOpenBookById(book.id)}
+                                className="w-full text-left rounded-lg border border-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                              >
+                                {book.title}
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-500">This Yarner hasn't shared anything with us... yet.</p>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => { setContributorsVisible(false); setSelectedContributor(null); }}
+                      className="mt-3 w-full text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
 
                 {/* Toolbar — rendered outside the block's motion.div so it never moves during drag */}
                 {isEditing && selectedBlockIndex !== null && (() => {
